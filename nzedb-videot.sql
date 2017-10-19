@@ -1,0 +1,11 @@
+create temporary table voot as select id, searchname, name, categories_id from releases where predb_id = 0 and categories_id >= 6000 and categories_id < 7000 and searchname LIKE 'VIDEOOT-%';
+create temporary table voot_pre as select id, filename, title from predb where category like 'XXX%' and created > NOW() - INTERVAL 1 WEEK;
+alter table voot_pre add column voot_name varchar(255) collate 'utf8_unicode_ci';
+update voot_pre set  voot_name = regexp_replace(regexp_replace(title, '(?-i)[a-z ''\\\\.]', ''), '(.+\\\\d\\\\d\\\\d\\\\d\\\\d\\\\d).*', '\\\\1');
+update voot_pre set  voot_name = concat('VIDEOOT-', regexp_replace(regexp_replace(title, '(?-i)[a-z ''\\\\.]', ''), '(.+\\\\d\\\\d\\\\d\\\\d\\\\d\\\\d).*', '\\\\1'));
+create index vt on voot(searchname);
+create index vt2 on voot_pre(voot_name);
+truncate table predb_imports;
+insert into predb_imports(title, category, source, filename)  select regexp_replace(title, '(.+?).(1080p|720p|DivX).+', '\\\\1.DVDRIP.XviD-VIDEOOT'), 'XXX/XviD' as category, 'unk', searchname from voot inner join voot_pre on voot.searchname = voot_pre.voot_name;
+INSERT INTO predb (title, nfo, size, files, filename, nuked, nukereason, category, created, source, requestid, groups_id)   SELECT pi.title, pi.nfo, pi.size, pi.files, pi.filename, pi.nuked, pi.nukereason, pi.category,  pi.created, pi.source, pi.requestid, groups_id     FROM predb_imports AS pi   ON DUPLICATE KEY UPDATE predb.nfo = IF(predb.nfo IS NULL, pi.nfo, predb.nfo),   predb.size = IF(predb.size IS NULL, pi.size, predb.size),   predb.files = IF(predb.files IS NULL, pi.files, predb.files),   predb.filename = IF(predb.filename = '', pi.filename, predb.filename),   predb.nuked = IF(pi.nuked > 0, pi.nuked, predb.nuked),   predb.nukereason = IF(pi.nuked > 0, pi.nukereason, predb.nukereason),   predb.category = IF(predb.category IS NULL, pi.category, predb.category),   predb.requestid = IF(predb.requestid = 0, pi.requestid, predb.requestid),   predb.groups_id = IF(predb.groups_id = 0, pi.groups_id, predb.groups_id);
+UPDATE releases r INNER JOIN predb     ON predb.filename = r.searchname SET r.predb_id = predb.id,          r.searchname = predb.title WHERE predb_id = 0         AND categories_id >= 6000         AND categories_id < 7000 ;
